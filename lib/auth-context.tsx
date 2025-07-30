@@ -22,7 +22,7 @@ interface AuthContextType {
       username: string
     },
   ) => Promise<{ error: any }>
-  signIn: (email: string, password: string) => Promise<{ error: any }>
+  signIn: (email: string, password:string) => Promise<{ data: { profile: Profile | null }; error: any }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: any }>
 }
@@ -166,14 +166,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signIn = async (email: string, password: string) => {
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (signInError) {
+      return { data: { profile: null }, error: signInError }
+    }
+
+    if (!signInData.user) {
+      return { data: { profile: null }, error: new Error("Authentication succeeded but user not found.") }
+    }
+
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-      return { error }
+      // Use maybeSingle to handle 0 or 1 rows gracefully
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", signInData.user.id).maybeSingle()
+
+      if (error) {
+        // Handle multiple rows error - try to get first row as fallback
+        if (error.message.includes("multiple") || error.message.includes("JSON object requested")) {
+          console.warn("Multiple profile rows found for user. Using first row as fallback.")
+          const { data: firstRow, error: fallbackError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", signInData.user.id)
+            .limit(1)
+            .single()
+
+          if (fallbackError) {
+            throw fallbackError
+          }
+          return { data: { profile: firstRow }, error: null }
+        }
+        throw error
+      }
+
+      return { data: { profile: data }, error: null }
     } catch (error) {
-      return { error }
+      console.error("Error fetching profile after sign in:", error)
+      return { data: { profile: null }, error }
     }
   }
 
