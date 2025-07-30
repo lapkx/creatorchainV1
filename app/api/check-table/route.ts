@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { supabase } from "@/lib/supabase"
+import { createServerClient } from "@/lib/supabase-server"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const tableName = searchParams.get("table")
+  const supabase = createServerClient()
 
   if (!tableName) {
     return NextResponse.json({ error: "Table name is required" }, { status: 400 })
@@ -33,6 +34,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { tables } = await request.json()
+    const supabase = createServerClient()
 
     if (!Array.isArray(tables)) {
       return NextResponse.json({ error: "Tables array is required" }, { status: 400 })
