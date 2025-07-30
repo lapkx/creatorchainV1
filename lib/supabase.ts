@@ -11,31 +11,37 @@ export type Database = {
       profiles: {
         Row: {
           id: string
-          user_type: "creator" | "viewer"
-          username: string
-          first_name: string
-          last_name: string
+          email: string
+          full_name: string | null
           avatar_url: string | null
+          user_type: "creator" | "viewer" | "admin"
+          bio: string | null
+          social_links: any
+          last_login: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id: string
-          user_type: "creator" | "viewer"
-          username: string
-          first_name: string
-          last_name: string
+          email: string
+          full_name?: string | null
           avatar_url?: string | null
+          user_type?: "creator" | "viewer" | "admin"
+          bio?: string | null
+          social_links?: any
+          last_login?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          user_type?: "creator" | "viewer"
-          username?: string
-          first_name?: string
-          last_name?: string
+          email?: string
+          full_name?: string | null
           avatar_url?: string | null
+          user_type?: "creator" | "viewer" | "admin"
+          bio?: string | null
+          social_links?: any
+          last_login?: string | null
           created_at?: string
           updated_at?: string
         }

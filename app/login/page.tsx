@@ -37,7 +37,8 @@ export default function LoginPage() {
     }
 
     if (!data.profile) {
-      setError("Login successful, but no profile was found.")
+      // If no profile exists, redirect to setup page
+      router.push("/setup")
       setIsSubmitting(false)
       return
     }
