@@ -48,6 +48,7 @@ async function setupDatabase() {
     "04-seed-data.sql",
     "05-link-tracking-system.sql",
     "06-user-stats-function.sql",
+    "07-create-user-points-table.sql",
   ]
 
   for (const file of sqlFiles) {
