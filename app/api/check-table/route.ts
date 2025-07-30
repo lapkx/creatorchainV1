@@ -15,12 +15,52 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       table: tableName,
       exists: !error,
+      error: error?.message || null,
     })
-  } catch (error) {
+  } catch (err) {
     return NextResponse.json({
       table: tableName,
       exists: false,
-      error: error instanceof Error ? error.message : "Unknown error",
+      error: err instanceof Error ? err.message : "Unknown error",
     })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { tables } = await request.json()
+
+    if (!Array.isArray(tables)) {
+      return NextResponse.json({ error: "Tables must be an array" }, { status: 400 })
+    }
+
+    const results = await Promise.all(
+      tables.map(async (tableName: string) => {
+        try {
+          const { error } = await supabase.from(tableName).select("*").limit(1)
+
+          return {
+            table: tableName,
+            exists: !error,
+            error: error?.message || null,
+          }
+        } catch (err) {
+          return {
+            table: tableName,
+            exists: false,
+            error: err instanceof Error ? err.message : "Unknown error",
+          }
+        }
+      }),
+    )
+
+    return NextResponse.json({ results })
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: err instanceof Error ? err.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
