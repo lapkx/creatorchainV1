@@ -4,6 +4,7 @@ import { LinkTrackingService } from "@/lib/link-tracking"
 import { AntiBotService } from "@/lib/anti-bot"
 import { SocialMediaService } from "@/lib/social-media"
 import { NotificationService } from "@/lib/notifications"
+import { NotificationServerService } from "@/lib/notifications-server"
 import { createServerClient } from "@/lib/supabase-server"
 
 export async function generateReferralLink(contentId: string) {
@@ -115,7 +116,7 @@ export async function recordShare(
             })
 
             // Send notification
-            await NotificationService.notifyShareVerified(referralLink.viewer_id, platform, points)
+            await NotificationServerService.notifyShareVerified(referralLink.viewer_id, platform, points)
           }
         }
       }, 10000) // 10 second delay for YouTube API
