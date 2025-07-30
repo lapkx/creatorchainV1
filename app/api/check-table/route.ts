@@ -1,71 +1,39 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@/lib/supabase-server"
+import { NextResponse } from "next/server"
+import { createClient } from "@supabase/supabase-js"
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const tableName = searchParams.get("table")
-  const supabase = createServerClient()
 
   if (!tableName) {
     return NextResponse.json({ error: "Table name is required" }, { status: 400 })
   }
 
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: "Missing Supabase environment variables" }, { status: 500 })
+  }
+
   try {
-    const { error } = await supabase.from(tableName).select("*").limit(1)
+    const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+
+    const { error } = await supabase.from(tableName).select("*").limit(0)
 
     return NextResponse.json({
-      exists: !error,
       table: tableName,
+      exists: !error,
       error: error?.message || null,
     })
   } catch (error) {
-    console.error(`Error checking table ${tableName}:`, error)
     return NextResponse.json(
       {
-        exists: false,
         table: tableName,
-        error: "Failed to check table existence",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const { tables } = await request.json()
-    const supabase = createServerClient()
-
-    if (!Array.isArray(tables)) {
-      return NextResponse.json({ error: "Tables array is required" }, { status: 400 })
-    }
-
-    const results = await Promise.all(
-      tables.map(async (tableName: string) => {
-        try {
-          const { error } = await supabase.from(tableName).select("*").limit(1)
-
-          return {
-            name: tableName,
-            exists: !error,
-            error: error?.message || null,
-          }
-        } catch (error) {
-          return {
-            name: tableName,
-            exists: false,
-            error: "Failed to check table",
-          }
-        }
-      }),
-    )
-
-    return NextResponse.json({ results })
-  } catch (error) {
-    console.error("Error checking tables:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to check tables",
+        exists: false,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

@@ -1,70 +1,64 @@
-import { supabase } from "@/lib/supabase"
+import { createClient } from "@supabase/supabase-js"
 
-export interface TableStatus {
+interface TableCheck {
   name: string
   exists: boolean
-  description: string
+  error?: string
 }
 
-export const requiredTables: TableStatus[] = [
-  { name: "profiles", exists: false, description: "User profiles and account information" },
-  { name: "content", exists: false, description: "Creator content and campaigns" },
-  { name: "share_links", exists: false, description: "Trackable share links" },
-  { name: "share_clicks", exists: false, description: "Click tracking and analytics" },
-  { name: "user_points", exists: false, description: "Point system and rewards" },
-  { name: "notifications", exists: false, description: "User notifications" },
-]
-
-export async function checkTableExists(tableName: string): Promise<boolean> {
-  try {
-    const { error } = await supabase.from(tableName).select("*").limit(1)
-
-    return !error
-  } catch (error) {
-    console.error(`Error checking table ${tableName}:`, error)
-    return false
+export async function checkDatabaseTables(): Promise<TableCheck[]> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return []
   }
-}
 
-export async function checkAllTables(): Promise<TableStatus[]> {
-  const results = await Promise.all(
-    requiredTables.map(async (table) => ({
-      ...table,
-      exists: await checkTableExists(table.name),
-    })),
-  )
+  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+
+  const tables = ["profiles", "content", "share_links", "share_clicks", "user_points", "notifications"]
+
+  const results: TableCheck[] = []
+
+  for (const tableName of tables) {
+    try {
+      const { error } = await supabase.from(tableName).select("*").limit(0)
+      results.push({
+        name: tableName,
+        exists: !error,
+        error: error?.message,
+      })
+    } catch (error) {
+      results.push({
+        name: tableName,
+        exists: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      })
+    }
+  }
 
   return results
 }
 
 export function checkEnvironmentVariables() {
-  const requiredEnvVars = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"]
+  const requiredVars = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"]
 
-  const optionalEnvVars = ["YOUTUBE_API_KEY"]
+  const optionalVars = ["YOUTUBE_API_KEY"]
 
-  const status = {
-    required: requiredEnvVars.map((name) => ({
-      name,
-      exists: !!process.env[name],
-      description: getEnvVarDescription(name),
-    })),
-    optional: optionalEnvVars.map((name) => ({
-      name,
-      exists: !!process.env[name],
-      description: getEnvVarDescription(name),
-    })),
+  const results = {
+    required: {} as Record<string, boolean>,
+    optional: {} as Record<string, boolean>,
   }
 
-  return status
-}
-
-function getEnvVarDescription(name: string): string {
-  const descriptions: Record<string, string> = {
-    NEXT_PUBLIC_SUPABASE_URL: "Supabase project URL",
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: "Supabase anonymous key",
-    SUPABASE_SERVICE_ROLE_KEY: "Supabase service role key",
-    YOUTUBE_API_KEY: "YouTube Data API key (optional)",
+  for (const varName of requiredVars) {
+    results.required[varName] = !!process.env[varName]
   }
 
-  return descriptions[name] || "Environment variable"
+  for (const varName of optionalVars) {
+    results.optional[varName] = !!process.env[varName]
+  }
+
+  return results
 }

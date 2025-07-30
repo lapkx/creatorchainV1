@@ -62,18 +62,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchProfile = async (userId: string) => {
     try {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
+      setLoading(true)
+
+      // Use maybeSingle to handle 0 or 1 rows gracefully
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle()
 
       if (error) {
-        // If table doesn't exist, log warning but don't crash
+        // Handle specific error cases
         if (error.code === "PGRST116" || error.message.includes("does not exist")) {
           console.warn("Database tables not set up yet. Please run the setup scripts.")
           setProfile(null)
           setLoading(false)
           return
         }
+
+        if (error.message.includes("infinite recursion")) {
+          console.error("RLS policy recursion detected. Database needs to be fixed.")
+          setProfile(null)
+          setLoading(false)
+          return
+        }
+
+        if (error.code === "42P01") {
+          console.warn("Profiles table does not exist. Please set up the database.")
+          setProfile(null)
+          setLoading(false)
+          return
+        }
+
+        // Handle multiple rows error - try to get first row as fallback
+        if (error.message.includes("multiple") || error.message.includes("JSON object requested")) {
+          console.warn("Multiple profile rows found for user. Using first row as fallback.")
+          try {
+            const { data: firstRow, error: fallbackError } = await supabase
+              .from("profiles")
+              .select("*")
+              .eq("id", userId)
+              .limit(1)
+              .single()
+
+            if (!fallbackError && firstRow) {
+              setProfile(firstRow)
+              setLoading(false)
+              return
+            }
+          } catch (fallbackError) {
+            console.error("Fallback query also failed:", fallbackError)
+          }
+        }
+
         throw error
       }
+
+      // Handle case where no profile exists (data is null)
+      if (!data) {
+        console.log("No profile found for user, this is expected for new users")
+        setProfile(null)
+        setLoading(false)
+        return
+      }
+
       setProfile(data)
     } catch (error) {
       console.error("Error fetching profile:", error)
@@ -109,32 +157,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error
 
-      // Create profile - with error handling for missing table
-      if (data.user) {
-        try {
-          const { error: profileError } = await supabase.from("profiles").insert({
-            id: data.user.id,
-            user_type: userData.userType,
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            username: userData.username,
-          })
-
-          if (profileError) {
-            if (profileError.message.includes("does not exist")) {
-              console.warn("Database tables not set up. User created but profile not saved.")
-              return { error: new Error("Database not configured. Please contact support.") }
-            }
-            throw profileError
-          }
-        } catch (profileError) {
-          console.error("Error creating profile:", profileError)
-          return { error: profileError }
-        }
-      }
-
       return { error: null }
     } catch (error) {
+      console.error("Signup error:", error)
       return { error }
     }
   }
