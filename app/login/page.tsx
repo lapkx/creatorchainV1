@@ -9,24 +9,15 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Zap } from "lucide-react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { signIn, profile, loading } = useAuth()
+  const { signIn } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    // Redirect if user is already logged in and profile is loaded
-    if (!loading && profile) {
-      setIsSubmitting(false)
-      const dashboardPath = profile.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
-      router.push(dashboardPath)
-    }
-  }, [profile, loading, router])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -37,13 +28,23 @@ export default function LoginPage() {
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
-    const { error } = await signIn(email, password)
+    const { data, error: signInError } = await signIn(email, password)
 
-    if (error) {
-      setError(error.message)
+    if (signInError) {
+      setError(signInError.message)
       setIsSubmitting(false)
+      return
     }
-    // On success, the useEffect hook will handle the redirect.
+
+    if (!data.profile) {
+      setError("Login successful, but no profile was found.")
+      setIsSubmitting(false)
+      return
+    }
+
+    const dashboardPath = data.profile.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
+    router.push(dashboardPath)
+    setIsSubmitting(false)
   }
 
   return (
