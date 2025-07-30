@@ -9,16 +9,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { Zap } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { supabase } from "@/lib/supabase"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { signIn, profile, loading } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Redirect if user is already logged in and profile is loaded
+    if (!loading && profile) {
+      setIsSubmitting(false)
+      const dashboardPath = profile.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
+      router.push(dashboardPath)
+    }
+  }, [profile, loading, router])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -29,39 +37,13 @@ export default function LoginPage() {
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
-    const { error: signInError } = await signIn(email, password)
+    const { error } = await signIn(email, password)
 
-    if (signInError) {
-      setError(signInError.message)
-      setIsSubmitting(false)
-      return
-    }
-
-    // Manually fetch session and profile to redirect
-    try {
-      const {
-        data: { session },
-        error: sessionError,
-      } = await supabase.auth.getSession()
-
-      if (sessionError) throw sessionError
-      if (!session) throw new Error("Not authenticated after sign in.")
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("user_type")
-        .eq("id", session.user.id)
-        .single()
-
-      if (profileError) throw profileError
-      if (!profile) throw new Error("No profile found for user.")
-
-      const dashboardPath = profile.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
-      router.push(dashboardPath)
-    } catch (catchError: any) {
-      setError(catchError.message || "An unexpected error occurred during login.")
+    if (error) {
+      setError(error.message)
       setIsSubmitting(false)
     }
+    // On success, the useEffect hook will handle the redirect.
   }
 
   return (
