@@ -51,6 +51,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
+        // Small delay to ensure session is fully established
+        if (event === 'SIGNED_IN') {
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
         await fetchProfile(session.user.id)
       } else {
         setProfile(null)

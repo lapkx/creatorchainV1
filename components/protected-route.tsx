@@ -19,14 +19,20 @@ export function ProtectedRoute({ children, requiredUserType, redirectTo = "/logi
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        router.push(redirectTo)
+        // Only redirect if not already on the redirect page
+        if (window.location.pathname !== redirectTo) {
+          router.push(redirectTo)
+        }
         return
       }
 
       if (requiredUserType && profile?.user_type !== requiredUserType) {
         // Redirect to appropriate dashboard based on user type
         const dashboardPath = profile?.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
-        router.push(dashboardPath)
+        // Only redirect if not already on the target page
+        if (window.location.pathname !== dashboardPath) {
+          router.push(dashboardPath)
+        }
         return
       }
     }

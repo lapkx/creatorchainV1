@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-
+import React from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,9 +15,17 @@ import { useAuth } from "@/lib/auth-context"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { signIn } = useAuth()
+  const { signIn, user, profile, loading } = useAuth()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Redirect if already authenticated
+  React.useEffect(() => {
+    if (!loading && user && profile) {
+      const dashboardPath = profile.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
+      router.push(dashboardPath)
+    }
+  }, [user, profile, loading, router])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -28,24 +36,32 @@ export default function LoginPage() {
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
-    const { data, error: signInError } = await signIn(email, password)
+    try {
+      const { data, error: signInError } = await signIn(email, password)
 
-    if (signInError) {
-      setError(signInError.message)
+      if (signInError) {
+        setError(signInError.message)
+        setIsSubmitting(false)
+        return
+      }
+
+      // Wait a bit for auth state to update
+      await new Promise(resolve => setTimeout(resolve, 1000))
+
+      if (!data.profile) {
+        // If no profile exists, redirect to setup page
+        router.push("/setup")
+        return
+      }
+
+      const dashboardPath = data.profile.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
+      router.push(dashboardPath)
+    } catch (error) {
+      console.error("Login error:", error)
+      setError("An unexpected error occurred. Please try again.")
+    } finally {
       setIsSubmitting(false)
-      return
     }
-
-    if (!data.profile) {
-      // If no profile exists, redirect to setup page
-      router.push("/setup")
-      setIsSubmitting(false)
-      return
-    }
-
-    const dashboardPath = data.profile.user_type === "creator" ? "/creator/dashboard" : "/viewer/dashboard"
-    router.push(dashboardPath)
-    setIsSubmitting(false)
   }
 
   return (
