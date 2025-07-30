@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,29 +15,37 @@ import { getCreatorContent } from "@/app/actions/content"
 import { NotificationSystem } from "@/components/notification-system"
 
 export default function CreatorDashboard() {
-  const { user, profile, signOut } = useAuth()
+  const { user, profile, signOut, loading: authLoading } = useAuth()
   const [content, setContent] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [contentLoading, setContentLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
 
-  useEffect(() => {
-    if (user) {
-      fetchContent()
-    }
-  }, [user])
-
-  const fetchContent = async () => {
+  const fetchContent = useCallback(async () => {
     if (!user) return
 
     const { data, error } = await getCreatorContent(user.id)
     if (data) {
       setContent(data)
     }
-    setLoading(false)
-  }
+    setContentLoading(false)
+  }, [user])
+
+  useEffect(() => {
+    if (user) {
+      fetchContent()
+    }
+  }, [user, fetchContent])
 
   const handleSignOut = async () => {
     await signOut()
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600" />
+      </div>
+    )
   }
 
   // Mock data
@@ -125,7 +133,7 @@ export default function CreatorDashboard() {
           {/* Welcome Section */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold mb-2">Welcome back, {profile?.first_name}! 👋</h1>
-            <p className="text-gray-600">Here's what's happening with your content today.</p>
+            <p className="text-gray-600">Here&apos;s what&apos;s happening with your content today.</p>
           </div>
 
           {/* Stats Cards */}

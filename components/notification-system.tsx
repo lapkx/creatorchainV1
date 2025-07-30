@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { supabase } from "@/lib/supabase"
 import { NotificationService } from "@/lib/notifications"
@@ -20,13 +20,24 @@ interface Notification {
 }
 
 export function NotificationSystem() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isOpen, setIsOpen] = useState(false)
 
-  useEffect(() => {
+  const loadNotifications = useCallback(async () => {
     if (!user) return
+
+    const { data } = await NotificationService.getNotifications(user.id)
+    if (data) {
+      setNotifications(data)
+      const unread = data.filter((n) => !n.read).length
+      setUnreadCount(unread)
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (loading || !user) return
 
     // Load initial notifications
     loadNotifications()
@@ -68,17 +79,10 @@ export function NotificationSystem() {
     return () => {
       channel.unsubscribe()
     }
-  }, [user])
+  }, [user, loading, loadNotifications])
 
-  const loadNotifications = async () => {
-    if (!user) return
-
-    const { data } = await NotificationService.getNotifications(user.id)
-    if (data) {
-      setNotifications(data)
-      const unread = data.filter((n) => !n.read).length
-      setUnreadCount(unread)
-    }
+  if (loading) {
+    return null
   }
 
   const markAsRead = async (notificationId: string) => {
