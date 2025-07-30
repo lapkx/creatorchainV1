@@ -2,6 +2,9 @@
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
+  -- Temporarily bypass RLS
+  SET LOCAL ROLE postgres;
+
   INSERT INTO profiles (id, user_type, username, first_name, last_name)
   VALUES (
     NEW.id,
@@ -10,6 +13,10 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'first_name', 'User'),
     COALESCE(NEW.raw_user_meta_data->>'last_name', 'Name')
   );
+
+  -- Revert to original role
+  RESET ROLE;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
