@@ -19,24 +19,21 @@ export default function SetupPage() {
   const [tables, setTables] = useState<TableStatus[]>([
     { name: "profiles", exists: false, description: "User profile information" },
     { name: "content", exists: false, description: "Creator content and campaigns" },
-    { name: "share_links", exists: false, description: "Trackable share links" },
-    { name: "share_clicks", exists: false, description: "Click tracking data" },
-    { name: "user_points", exists: false, description: "User point balances" },
-    { name: "point_transactions", exists: false, description: "Point transaction history" },
+    { name: "rewards", exists: false, description: "Available rewards for sharing" },
+    { name: "shares", exists: false, description: "User share tracking" },
+    { name: "viewer_rewards", exists: false, description: "Claimed rewards by viewers" },
   ])
 
   const [isChecking, setIsChecking] = useState(false)
   const [envStatus, setEnvStatus] = useState({
     supabaseUrl: false,
     supabaseAnonKey: false,
-    supabaseServiceKey: false,
   })
 
   const checkEnvironmentVariables = () => {
     setEnvStatus({
       supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
       supabaseAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      supabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     })
   }
 
@@ -69,8 +66,13 @@ export default function SetupPage() {
     }
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      alert("SQL copied to clipboard!")
+    } catch (err) {
+      console.error("Failed to copy text: ", err)
+    }
   }
 
   const allTablesExist = tables.every((table) => table.exists)
@@ -87,10 +89,11 @@ export default function SetupPage() {
 -- 1. Create profiles table
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
-  avatar_url TEXT,
   user_type TEXT CHECK (user_type IN ('creator', 'viewer')) NOT NULL DEFAULT 'viewer',
+  username TEXT UNIQUE NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  avatar_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -101,63 +104,56 @@ CREATE TABLE IF NOT EXISTS public.content (
   creator_id UUID REFERENCES public.profiles(id) NOT NULL,
   title TEXT NOT NULL,
   description TEXT,
+  platform TEXT CHECK (platform IN ('youtube', 'instagram', 'tiktok')) NOT NULL,
   content_url TEXT NOT NULL,
-  platform TEXT NOT NULL,
   points_per_share INTEGER DEFAULT 10,
-  max_shares INTEGER,
-  is_active BOOLEAN DEFAULT true,
+  campaign_duration INTEGER DEFAULT 30,
+  status TEXT CHECK (status IN ('active', 'paused', 'completed')) DEFAULT 'active',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 3. Create share_links table
-CREATE TABLE IF NOT EXISTS public.share_links (
+-- 3. Create rewards table
+CREATE TABLE IF NOT EXISTS public.rewards (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   content_id UUID REFERENCES public.content(id) NOT NULL,
-  user_id UUID REFERENCES public.profiles(id) NOT NULL,
-  share_code TEXT UNIQUE NOT NULL,
-  original_url TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- 4. Create share_clicks table
-CREATE TABLE IF NOT EXISTS public.share_clicks (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  share_link_id UUID REFERENCES public.share_links(id) NOT NULL,
-  clicked_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  ip_address INET,
-  user_agent TEXT,
-  verified BOOLEAN DEFAULT false,
-  points_awarded INTEGER DEFAULT 0
-);
-
--- 5. Create user_points table
-CREATE TABLE IF NOT EXISTS public.user_points (
-  user_id UUID REFERENCES public.profiles(id) PRIMARY KEY,
-  total_points INTEGER DEFAULT 0,
-  available_points INTEGER DEFAULT 0,
-  lifetime_earned INTEGER DEFAULT 0,
+  type TEXT CHECK (type IN ('physical', 'digital', 'raffle')) NOT NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  shares_required INTEGER NOT NULL,
+  quantity INTEGER,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 6. Create point_transactions table
-CREATE TABLE IF NOT EXISTS public.point_transactions (
+-- 4. Create shares table
+CREATE TABLE IF NOT EXISTS public.shares (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES public.profiles(id) NOT NULL,
-  content_id UUID REFERENCES public.content(id),
-  transaction_type TEXT CHECK (transaction_type IN ('earned', 'spent', 'bonus')) NOT NULL,
-  points INTEGER NOT NULL,
-  description TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  content_id UUID REFERENCES public.content(id) NOT NULL,
+  viewer_id UUID REFERENCES public.profiles(id) NOT NULL,
+  referral_link TEXT NOT NULL,
+  share_count INTEGER DEFAULT 0,
+  points_earned INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. Create viewer_rewards table
+CREATE TABLE IF NOT EXISTS public.viewer_rewards (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  viewer_id UUID REFERENCES public.profiles(id) NOT NULL,
+  reward_id UUID REFERENCES public.rewards(id) NOT NULL,
+  status TEXT CHECK (status IN ('pending', 'claimed', 'shipped')) DEFAULT 'pending',
+  earned_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  claimed_date TIMESTAMP WITH TIME ZONE
 );
 
 -- Enable Row Level Security
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.content ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.share_links ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.share_clicks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_points ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.point_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.rewards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shares ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.viewer_rewards ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS Policies
 CREATE POLICY "Users can view own profile" ON public.profiles
@@ -173,27 +169,35 @@ CREATE POLICY "Creators can manage own content" ON public.content
   FOR ALL USING (auth.uid() = creator_id);
 
 CREATE POLICY "Anyone can view active content" ON public.content
-  FOR SELECT USING (is_active = true);
+  FOR SELECT USING (status = 'active');
 
-CREATE POLICY "Users can manage own share links" ON public.share_links
-  FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Content creators can manage rewards" ON public.rewards
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.content 
+      WHERE content.id = rewards.content_id 
+      AND content.creator_id = auth.uid()
+    )
+  );
 
-CREATE POLICY "Users can view own points" ON public.user_points
-  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can manage own shares" ON public.shares
+  FOR ALL USING (auth.uid() = viewer_id);
 
-CREATE POLICY "Users can view own transactions" ON public.point_transactions
-  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can view own rewards" ON public.viewer_rewards
+  FOR SELECT USING (auth.uid() = viewer_id);
 
--- Create functions for automatic profile creation
+-- Create function for automatic profile creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
-  VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'full_name');
-  
-  INSERT INTO public.user_points (user_id)
-  VALUES (NEW.id);
-  
+  INSERT INTO public.profiles (id, user_type, username, first_name, last_name)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'user_type', 'viewer'),
+    COALESCE(NEW.raw_user_meta_data->>'username', 'user_' || substr(NEW.id::text, 1, 8)),
+    COALESCE(NEW.raw_user_meta_data->>'first_name', 'First'),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', 'Last')
+  );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -206,10 +210,10 @@ CREATE TRIGGER on_auth_user_created
 
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_content_creator_id ON public.content(creator_id);
-CREATE INDEX IF NOT EXISTS idx_share_links_content_id ON public.share_links(content_id);
-CREATE INDEX IF NOT EXISTS idx_share_links_user_id ON public.share_links(user_id);
-CREATE INDEX IF NOT EXISTS idx_share_clicks_share_link_id ON public.share_clicks(share_link_id);
-CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);`
+CREATE INDEX IF NOT EXISTS idx_rewards_content_id ON public.rewards(content_id);
+CREATE INDEX IF NOT EXISTS idx_shares_content_id ON public.shares(content_id);
+CREATE INDEX IF NOT EXISTS idx_shares_viewer_id ON public.shares(viewer_id);
+CREATE INDEX IF NOT EXISTS idx_viewer_rewards_viewer_id ON public.viewer_rewards(viewer_id);`
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
@@ -247,20 +251,6 @@ CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transa
           <div className="flex items-center justify-between">
             <span className="font-mono text-sm">NEXT_PUBLIC_SUPABASE_ANON_KEY</span>
             {envStatus.supabaseAnonKey ? (
-              <Badge variant="default" className="bg-green-100 text-green-800">
-                <CheckCircle className="h-3 w-3 mr-1" />
-                Set
-              </Badge>
-            ) : (
-              <Badge variant="destructive">
-                <XCircle className="h-3 w-3 mr-1" />
-                Missing
-              </Badge>
-            )}
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-mono text-sm">SUPABASE_SERVICE_ROLE_KEY</span>
-            {envStatus.supabaseServiceKey ? (
               <Badge variant="default" className="bg-green-100 text-green-800">
                 <CheckCircle className="h-3 w-3 mr-1" />
                 Set

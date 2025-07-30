@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
+import { supabase } from "@/lib/supabase"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -9,20 +9,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Table name is required" }, { status: 400 })
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-  if (!supabaseUrl || !supabaseServiceKey) {
-    return NextResponse.json({ error: "Supabase configuration missing" }, { status: 500 })
-  }
-
   try {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
-
     const { error } = await supabase.from(tableName).select("*").limit(1)
 
-    return NextResponse.json({ exists: !error })
+    return NextResponse.json({
+      table: tableName,
+      exists: !error,
+    })
   } catch (error) {
-    return NextResponse.json({ exists: false, error: error.message })
+    return NextResponse.json({
+      table: tableName,
+      exists: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    })
   }
 }

@@ -2,7 +2,6 @@ import { supabase } from "./supabase"
 
 export async function checkDatabaseStatus(): Promise<Record<string, boolean>> {
   const requiredTables = ["profiles", "content", "rewards", "shares", "viewer_rewards"]
-
   const status: Record<string, boolean> = {}
 
   for (const table of requiredTables) {
@@ -19,4 +18,13 @@ export async function checkDatabaseStatus(): Promise<Record<string, boolean>> {
 
 export function isDatabaseReady(status: Record<string, boolean>): boolean {
   return Object.values(status).every(Boolean)
+}
+
+export async function checkTableExists(tableName: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from(tableName).select("*").limit(1)
+    return !error
+  } catch (error) {
+    return false
+  }
 }

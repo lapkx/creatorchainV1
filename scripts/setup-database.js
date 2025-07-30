@@ -3,7 +3,7 @@ const fs = require("fs")
 const path = require("path")
 
 // Load environment variables
-require("dotenv").config()
+require("dotenv").config({ path: ".env.local" })
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -17,12 +17,12 @@ if (!supabaseUrl || !supabaseServiceKey) {
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-async function runSqlFile(filePath) {
+async function runSQLFile(filePath) {
   try {
     const sql = fs.readFileSync(filePath, "utf8")
     console.log(`Running ${path.basename(filePath)}...`)
 
-    const { error } = await supabase.rpc("exec_sql", { sql_query: sql })
+    const { data, error } = await supabase.rpc("exec_sql", { sql_query: sql })
 
     if (error) {
       console.error(`Error in ${path.basename(filePath)}:`, error)
@@ -40,7 +40,7 @@ async function runSqlFile(filePath) {
 async function setupDatabase() {
   console.log("🚀 Starting database setup...")
 
-  const scriptsDir = path.join(__dirname)
+  const scriptsDir = path.join(__dirname, "../scripts")
   const sqlFiles = [
     "01-create-tables.sql",
     "02-setup-rls.sql",
@@ -50,25 +50,21 @@ async function setupDatabase() {
     "06-user-stats-function.sql",
   ]
 
-  let allSuccessful = true
-
   for (const file of sqlFiles) {
     const filePath = path.join(scriptsDir, file)
     if (fs.existsSync(filePath)) {
-      const success = await runSqlFile(filePath)
+      const success = await runSQLFile(filePath)
       if (!success) {
-        allSuccessful = false
+        console.error(`❌ Setup failed at ${file}`)
+        process.exit(1)
       }
     } else {
       console.warn(`⚠️  File not found: ${file}`)
     }
   }
 
-  if (allSuccessful) {
-    console.log("🎉 Database setup completed successfully!")
-  } else {
-    console.log("❌ Database setup completed with errors. Check the logs above.")
-  }
+  console.log("✅ Database setup completed successfully!")
+  console.log("🎉 Your Creatorchain platform is ready to use!")
 }
 
 setupDatabase().catch(console.error)
