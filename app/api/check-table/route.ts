@@ -13,16 +13,20 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.from(tableName).select("*").limit(1)
 
     return NextResponse.json({
-      table: tableName,
       exists: !error,
+      table: tableName,
       error: error?.message || null,
     })
-  } catch (err) {
-    return NextResponse.json({
-      table: tableName,
-      exists: false,
-      error: err instanceof Error ? err.message : "Unknown error",
-    })
+  } catch (error) {
+    console.error(`Error checking table ${tableName}:`, error)
+    return NextResponse.json(
+      {
+        exists: false,
+        table: tableName,
+        error: "Failed to check table existence",
+      },
+      { status: 500 },
+    )
   }
 }
 
@@ -31,7 +35,7 @@ export async function POST(request: NextRequest) {
     const { tables } = await request.json()
 
     if (!Array.isArray(tables)) {
-      return NextResponse.json({ error: "Tables must be an array" }, { status: 400 })
+      return NextResponse.json({ error: "Tables array is required" }, { status: 400 })
     }
 
     const results = await Promise.all(
@@ -40,25 +44,26 @@ export async function POST(request: NextRequest) {
           const { error } = await supabase.from(tableName).select("*").limit(1)
 
           return {
-            table: tableName,
+            name: tableName,
             exists: !error,
             error: error?.message || null,
           }
-        } catch (err) {
+        } catch (error) {
           return {
-            table: tableName,
+            name: tableName,
             exists: false,
-            error: err instanceof Error ? err.message : "Unknown error",
+            error: "Failed to check table",
           }
         }
       }),
     )
 
     return NextResponse.json({ results })
-  } catch (err) {
+  } catch (error) {
+    console.error("Error checking tables:", error)
     return NextResponse.json(
       {
-        error: err instanceof Error ? err.message : "Unknown error",
+        error: "Failed to check tables",
       },
       { status: 500 },
     )
