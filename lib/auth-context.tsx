@@ -1,27 +1,29 @@
 "use client"
 
 import type React from "react"
-
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase"
+import { supabase } from "./supabase"
+import type { Database } from "./supabase"
 
-interface Profile {
-  id: string
-  email: string
-  full_name: string | null
-  avatar_url: string | null
-  user_type: "creator" | "viewer"
-  created_at: string
-  updated_at: string
-}
+type Profile = Database["public"]["Tables"]["profiles"]["Row"]
 
 interface AuthContextType {
   user: User | null
   profile: Profile | null
   loading: boolean
+  signUp: (
+    email: string,
+    password: string,
+    userData: {
+      userType: "creator" | "viewer"
+      firstName: string
+      lastName: string
+      username: string
+    },
+  ) => Promise<{ error: any }>
+  signIn: (email: string, password: string) => Promise<{ error: any }>
   signOut: () => Promise<void>
-  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -30,85 +32,128 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
-
-      if (error) {
-        if (error.code === "42P01") {
-          // Table doesn't exist
-          console.warn("Profiles table does not exist. Please run database setup.")
-          return null
-        }
-        throw error
-      }
-
-      return data
-    } catch (error) {
-      console.error("Error fetching profile:", error)
-      return null
-    }
-  }
-
-  const refreshProfile = async () => {
-    if (user) {
-      const profileData = await fetchProfile(user.id)
-      setProfile(profileData)
-    }
-  }
-
-  const signOut = async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      console.error("Error signing out:", error)
-    } else {
-      setUser(null)
-      setProfile(null)
-    }
-  }
 
   useEffect(() => {
     // Get initial session
-    const getInitialSession = async () => {
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        setUser(session?.user ?? null)
-
-        if (session?.user) {
-          const profileData = await fetchProfile(session.user.id)
-          setProfile(profileData)
-        }
-      } catch (error) {
-        console.error("Error getting initial session:", error)
-      } finally {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        fetchProfile(session.user.id)
+      } else {
         setLoading(false)
       }
-    }
-
-    getInitialSession()
+    })
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
-
       if (session?.user) {
-        const profileData = await fetchProfile(session.user.id)
-        setProfile(profileData)
+        await fetchProfile(session.user.id)
       } else {
         setProfile(null)
+        setLoading(false)
       }
-
-      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).single()
+
+      if (error) {
+        // If table doesn't exist, log warning but don't crash
+        if (error.code === "PGRST116" || error.message.includes("does not exist")) {
+          console.warn("Database tables not set up yet. Please run the setup scripts.")
+          setProfile(null)
+          setLoading(false)
+          return
+        }
+        throw error
+      }
+      setProfile(data)
+    } catch (error) {
+      console.error("Error fetching profile:", error)
+      setProfile(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const signUp = async (
+    email: string,
+    password: string,
+    userData: {
+      userType: "creator" | "viewer"
+      firstName: string
+      lastName: string
+      username: string
+    },
+  ) => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            user_type: userData.userType,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            username: userData.username,
+          },
+        },
+      })
+
+      if (error) throw error
+
+      // Create profile - with error handling for missing table
+      if (data.user) {
+        try {
+          const { error: profileError } = await supabase.from("profiles").insert({
+            id: data.user.id,
+            user_type: userData.userType,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            username: userData.username,
+          })
+
+          if (profileError) {
+            if (profileError.message.includes("does not exist")) {
+              console.warn("Database tables not set up. User created but profile not saved.")
+              return { error: new Error("Database not configured. Please contact support.") }
+            }
+            throw profileError
+          }
+        } catch (profileError) {
+          console.error("Error creating profile:", profileError)
+          return { error: profileError }
+        }
+      }
+
+      return { error: null }
+    } catch (error) {
+      return { error }
+    }
+  }
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+      return { error }
+    } catch (error) {
+      return { error }
+    }
+  }
+
+  const signOut = async () => {
+    await supabase.auth.signOut()
+  }
 
   return (
     <AuthContext.Provider
@@ -116,8 +161,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         profile,
         loading,
+        signUp,
+        signIn,
         signOut,
-        refreshProfile,
       }}
     >
       {children}

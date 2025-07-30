@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { CheckCircle, XCircle, RefreshCw, Copy, ExternalLink, AlertTriangle } from "lucide-react"
-import { createClient } from "@/lib/supabase"
+import { supabase } from "@/lib/supabase"
 
 interface TableStatus {
   name: string
@@ -43,8 +43,6 @@ export default function SetupPage() {
   const checkTables = async () => {
     setIsChecking(true)
     try {
-      const supabase = createClient()
-
       const updatedTables = await Promise.all(
         tables.map(async (table) => {
           try {

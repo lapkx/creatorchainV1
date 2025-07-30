@@ -1,46 +1,22 @@
-import { createClient } from "@/lib/supabase"
+import { supabase } from "./supabase"
 
-export interface TableInfo {
-  name: string
-  exists: boolean
-  description: string
-}
+export async function checkDatabaseStatus(): Promise<Record<string, boolean>> {
+  const requiredTables = ["profiles", "content", "rewards", "shares", "viewer_rewards"]
 
-export const requiredTables: TableInfo[] = [
-  { name: "profiles", exists: false, description: "User profile information" },
-  { name: "content", exists: false, description: "Creator content and campaigns" },
-  { name: "share_links", exists: false, description: "Trackable share links" },
-  { name: "share_clicks", exists: false, description: "Click tracking data" },
-  { name: "user_points", exists: false, description: "User point balances" },
-  { name: "point_transactions", exists: false, description: "Point transaction history" },
-]
+  const status: Record<string, boolean> = {}
 
-export async function checkTableExists(tableName: string): Promise<boolean> {
-  try {
-    const supabase = createClient()
-    const { error } = await supabase.from(tableName).select("*").limit(1)
-
-    return !error
-  } catch {
-    return false
+  for (const table of requiredTables) {
+    try {
+      const { error } = await supabase.from(table).select("*").limit(1)
+      status[table] = !error
+    } catch (error) {
+      status[table] = false
+    }
   }
+
+  return status
 }
 
-export async function checkAllTables(): Promise<TableInfo[]> {
-  const results = await Promise.all(
-    requiredTables.map(async (table) => ({
-      ...table,
-      exists: await checkTableExists(table.name),
-    })),
-  )
-
-  return results
-}
-
-export function checkEnvironmentVariables() {
-  return {
-    supabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-    supabaseAnonKey: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    supabaseServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
-  }
+export function isDatabaseReady(status: Record<string, boolean>): boolean {
+  return Object.values(status).every(Boolean)
 }
