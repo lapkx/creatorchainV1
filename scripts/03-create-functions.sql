@@ -41,3 +41,16 @@ CREATE TRIGGER update_rewards_updated_at BEFORE UPDATE ON rewards
 
 CREATE TRIGGER update_shares_updated_at BEFORE UPDATE ON shares
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to check if a table exists
+CREATE OR REPLACE FUNCTION public.check_table_exists(p_table_name TEXT)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+    AND table_name = p_table_name
+  );
+END;
+$$ LANGUAGE plpgsql;
