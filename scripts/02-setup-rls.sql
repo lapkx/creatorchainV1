@@ -12,7 +12,11 @@ CREATE POLICY "Users can view their own profile" ON profiles
 CREATE POLICY "Users can update their own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id);
 
--- INSERT policy is removed, profile creation is handled by the handle_new_user trigger
+CREATE POLICY "Users can create their own profile" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Allow auth admin to create profiles" ON public.profiles
+  FOR INSERT TO supabase_auth_admin WITH CHECK (true);
 
 CREATE POLICY "Anyone can view public profile info" ON profiles
   FOR SELECT USING (true);
