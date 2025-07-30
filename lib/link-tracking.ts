@@ -46,6 +46,73 @@ export class LinkTrackingService {
     }
   }
 
+  static async trackLinkClick(linkCode: string, metadata: { country?: string; deviceType?: string; browser?: string } = {}): Promise<boolean> {
+    try {
+      const serverClient = createServerClient()
+
+      // Get referral link
+      const { data: link } = await serverClient
+        .from("referral_links")
+        .select("*")
+        .eq("link_code", linkCode)
+        .single()
+
+      if (!link) return false
+
+      // Track click
+      const { error } = await serverClient
+        .from("link_clicks")
+        .insert({
+          referral_link_id: link.id,
+          clicked_at: new Date().toISOString(),
+          country: metadata.country,
+          device_type: metadata.deviceType,
+          browser: metadata.browser,
+        })
+
+      if (error) throw error
+
+      return true
+    } catch (error) {
+      console.error("Error tracking link click:", error)
+      return false
+    }
+  }
+
+  static async getContentByLinkCode(linkCode: string): Promise<{ success: boolean; contentUrl?: string; error?: string }> {
+    try {
+      const serverClient = createServerClient()
+
+      const { data: link, error } = await serverClient
+        .from("referral_links")
+        .select(`
+          *,
+          content:content_id (
+            id,
+            url,
+            title
+          )
+        `)
+        .eq("link_code", linkCode)
+        .single()
+
+      if (error || !link) {
+        return { success: false, error: "Link not found" }
+      }
+
+      // Track the click
+      await this.trackLinkClick(linkCode)
+
+      return { 
+        success: true, 
+        contentUrl: link.content?.url || "" 
+      }
+    } catch (error) {
+      console.error("Error getting content by link code:", error)
+      return { success: false, error: "Failed to get content" }
+    }
+  }
+
   static async trackClick(
     linkCode: string,
     metadata: {

@@ -88,6 +88,24 @@ export class SocialMediaService {
       return {
         verified: true,
         engagement,
+        data: {
+          title: snippet.title,
+          views: viewCount,
+          likes: likeCount,
+          comments: commentCount,
+          publishedAt: snippet.publishedAt,
+        }
+      }
+    } catch (error) {
+      console.error("Error verifying YouTube video:", error)
+      return { verified: false, error: "Failed to verify video" }
+    }
+  }
+}
+
+      return {
+        verified: true,
+        engagement,
         videoData: {
           title: snippet.title,
           channelTitle: snippet.channelTitle,
