@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -32,27 +32,35 @@ import { NotificationSystem } from "@/components/notification-system"
 import { ShareTracker } from "@/components/share-tracker"
 
 export default function ViewerDashboard() {
-  const { user, profile, signOut } = useAuth()
+  const { user, profile, signOut, loading: authLoading } = useAuth()
   const [content, setContent] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [contentLoading, setContentLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("dashboard")
+
+  const fetchContent = useCallback(async () => {
+    const { data, error } = await getViewerContent()
+    if (data) {
+      setContent(data)
+    }
+    setContentLoading(false)
+  }, [])
 
   useEffect(() => {
     if (user) {
       fetchContent()
     }
-  }, [user])
-
-  const fetchContent = async () => {
-    const { data, error } = await getViewerContent()
-    if (data) {
-      setContent(data)
-    }
-    setLoading(false)
-  }
+  }, [user, fetchContent])
 
   const handleSignOut = async () => {
     await signOut()
+  }
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-purple-600" />
+      </div>
+    )
   }
 
   // Mock data
@@ -240,7 +248,7 @@ export default function ViewerDashboard() {
                 <Card>
                   <CardHeader>
                     <CardTitle>Active Campaigns</CardTitle>
-                    <CardDescription>Content you're currently promoting</CardDescription>
+                    <CardDescription>Content you&apos;re currently promoting</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
@@ -309,7 +317,7 @@ export default function ViewerDashboard() {
                         </div>
                         <div className="flex-1">
                           <p className="text-sm font-medium">+15 points earned</p>
-                          <p className="text-xs text-gray-500">Shared "Social Media Marketing"</p>
+                          <p className="text-xs text-gray-500">Shared &quot;Social Media Marketing&quot;</p>
                         </div>
                         <span className="text-xs text-gray-500">5h ago</span>
                       </div>
