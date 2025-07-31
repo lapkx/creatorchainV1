@@ -90,7 +90,7 @@ export function ShareTracker({
           <span>Share & Earn Points</span>
         </CardTitle>
         <CardDescription>
-          Earn {pointsPerShare} points by sharing "{contentTitle}"
+          Earn {pointsPerShare} points by sharing &quot;{contentTitle}&quot;
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -144,8 +144,8 @@ export function ShareTracker({
               </p>
               <p className="text-sm text-blue-700">
                 {shareStatus === "submitted"
-                  ? "We're verifying your share. You'll be notified when points are awarded."
-                  : `Congratulations! You've earned ${pointsPerShare} points.`}
+                  ? "We&apos;re verifying your share. You&apos;ll be notified when points are awarded."
+                  : `Congratulations! You&apos;ve earned ${pointsPerShare} points.`}
               </p>
             </div>
           </div>
@@ -158,7 +158,7 @@ export function ShareTracker({
             <ul className="text-sm text-yellow-800 space-y-1">
               <li>• Comment on the video with your referral link</li>
               <li>• Share in a community post (if you have a channel)</li>
-              <li>• Add to your video description (if you're a creator)</li>
+              <li>• Add to your video description (if you&apos;re a creator)</li>
               <li>• Share the link on your social media</li>
             </ul>
           </div>
