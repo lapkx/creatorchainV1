@@ -1,4 +1,4 @@
-export class SocialMediaVerifier {
+export class SocialMediaService {
   private static youtubeApiKey = process.env.YOUTUBE_API_KEY || process.env.NEXT_PUBLIC_YOUTUBE_API_KEY
 
   static async verifyYouTubeShare(url: string): Promise<{
@@ -19,7 +19,7 @@ export class SocialMediaVerifier {
       }
 
       // Extract video ID from URL
-      const videoId = this.extractYouTubeVideoId(url)
+      const videoId = this.extractVideoId(url)
       if (!videoId) {
         return { verified: false, error: "Invalid YouTube URL" }
       }
@@ -68,7 +68,25 @@ export class SocialMediaVerifier {
     }
   }
 
-  private static extractYouTubeVideoId(url: string): string | null {
+  static async verifyShare(platform: string, id: string, url: string): Promise<{
+    verified: boolean
+    engagement?: number
+    error?: string
+    data?: any
+  }> {
+    if (platform.toLowerCase() === "youtube") {
+      const shareUrl = url || `https://www.youtube.com/watch?v=${id}`
+      return this.verifyYouTubeShare(shareUrl)
+    }
+
+    return { verified: false, error: "Platform not supported" }
+  }
+
+  static extractVideoId(url: string): string | null {
+    return this._extractVideoId(url)
+  }
+
+  private static _extractVideoId(url: string): string | null {
     const patterns = [
       /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
       /youtube\.com\/watch\?.*v=([^&\n?#]+)/

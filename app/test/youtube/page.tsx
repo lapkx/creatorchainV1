@@ -89,7 +89,7 @@ export default function YouTubeTestPage() {
             <ol className="list-decimal list-inside space-y-2 text-sm">
               <li>Click one of the sample YouTube URLs or paste your own</li>
               <li>The system will extract the video ID and verify it with YouTube API</li>
-              <li>You'll see real-time verification status and video statistics</li>
+              <li>You&apos;ll see real-time verification status and video statistics</li>
               <li>Verified videos show engagement scores calculated from views, likes, and comments</li>
               <li>Failed verifications will show specific error messages</li>
             </ol>
