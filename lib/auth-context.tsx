@@ -269,7 +269,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      setUser(null)
+      setProfile(null)
+      setLoading(false)
+    }
   }
 
   const resetPassword = async (email: string) => {
