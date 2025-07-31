@@ -21,7 +21,7 @@ interface AuthContextType {
       lastName: string
       username: string
     },
-  ) => Promise<{ error: any }>
+  ) => Promise<{ data: any; error: any }>
   signIn: (email: string, password:string) => Promise<{ data: { profile: Profile | null }; error: any }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: any }>
@@ -179,10 +179,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      return { error: null }
+      return { data, error: null }
     } catch (error) {
       console.error("Signup error:", error)
-      return { error }
+      return { data: null, error }
     }
   }
 
