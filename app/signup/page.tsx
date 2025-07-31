@@ -23,11 +23,13 @@ export default function SignUpPage() {
   const [userType, setUserType] = useState(defaultType)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setIsSubmitting(true)
     setError(null)
+    setSuccess(null)
 
     const formData = new FormData(e.currentTarget)
     const email = formData.get("email") as string
@@ -43,7 +45,7 @@ export default function SignUpPage() {
       return
     }
 
-    const { error } = await signUp(email, password, {
+    const { data, error } = await signUp(email, password, {
       userType: userType as "creator" | "viewer",
       firstName,
       lastName,
@@ -53,10 +55,17 @@ export default function SignUpPage() {
     if (error) {
       setError(error.message)
       setIsSubmitting(false)
-    } else {
-      // Redirect based on user type
-      router.push(userType === "creator" ? "/creator/dashboard" : "/viewer/dashboard")
+      return
     }
+
+    setIsSubmitting(false)
+
+    if (data && !data.session) {
+      setSuccess("Account created! Please check your email to confirm your account.")
+      return
+    }
+
+    router.push(userType === "creator" ? "/creator/dashboard" : "/viewer/dashboard")
   }
 
   return (
@@ -96,6 +105,9 @@ export default function SignUpPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {success && (
+                    <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md">{success}</div>
+                  )}
                   {error && (
                     <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">{error}</div>
                   )}
@@ -157,6 +169,9 @@ export default function SignUpPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {success && (
+                    <div className="p-3 text-sm text-green-600 bg-green-50 border border-green-200 rounded-md">{success}</div>
+                  )}
                   {error && (
                     <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">{error}</div>
                   )}

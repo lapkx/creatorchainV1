@@ -21,7 +21,7 @@ interface AuthContextType {
       lastName: string
       username: string
     },
-  ) => Promise<{ error: any }>
+  ) => Promise<{ data: any; error: any }>
   signIn: (email: string, password:string) => Promise<{ data: { profile: Profile | null }; error: any }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: any }>
@@ -162,10 +162,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error
 
-      return { error: null }
+      if (data.user) {
+        // Ensure a profile record exists for the new user in case
+        // the database trigger hasn't been set up. Use full_name to
+        // remain compatible with older database schemas.
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert({
+            id: data.user.id,
+            email,
+            full_name: `${userData.firstName} ${userData.lastName}`,
+            user_type: userData.userType,
+          })
+        if (profileError) {
+          console.error("Error inserting profile during sign up:", profileError)
+        }
+      }
+
+      return { data, error: null }
     } catch (error) {
       console.error("Signup error:", error)
-      return { error }
+      return { data: null, error }
     }
   }
 
@@ -176,10 +193,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (signInError) {
+      setLoading(false)
       return { data: { profile: null }, error: signInError }
     }
 
     if (!signInData.user) {
+      setLoading(false)
       return { data: { profile: null }, error: new Error("Authentication succeeded but user not found.") }
     }
 
@@ -201,20 +220,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (fallbackError) {
             throw fallbackError
           }
+
+          setUser(signInData.user)
+          setProfile(firstRow)
+          setLoading(false)
           return { data: { profile: firstRow }, error: null }
         }
         throw error
       }
 
+      if (!data) {
+        // No profile exists for this user, create one from auth metadata
+        const meta = signInData.user.user_metadata as any
+        const fullName =
+          meta?.full_name ||
+          [meta?.first_name, meta?.last_name].filter(Boolean).join(" ") ||
+          null
+        const { data: newProfile, error: insertError } = await supabase
+          .from("profiles")
+          .insert({
+            id: signInData.user.id,
+            email: signInData.user.email!,
+            full_name: fullName,
+            user_type: meta?.user_type ?? "viewer",
+          })
+          .select()
+          .single()
+
+        if (insertError) {
+          throw insertError
+        }
+
+        setUser(signInData.user)
+        setProfile(newProfile)
+        setLoading(false)
+        return { data: { profile: newProfile }, error: null }
+      }
+
+      setUser(signInData.user)
+      setProfile(data)
+      setLoading(false)
       return { data: { profile: data }, error: null }
     } catch (error) {
       console.error("Error fetching profile after sign in:", error)
+      setLoading(false)
       return { data: { profile: null }, error }
     }
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      setUser(null)
+      setProfile(null)
+      setLoading(false)
+    }
   }
 
   const resetPassword = async (email: string) => {
