@@ -20,9 +20,9 @@ interface AuthContextType {
       firstName: string
       lastName: string
       username: string
-    },
-  ) => Promise<{ error: any }>
-  signIn: (email: string, password:string) => Promise<{ data: { profile: Profile | null }; error: any }>
+    }
+  ) => Promise<{ data: any; error: any }>
+  signIn: (email: string, password: string) => Promise<{ data: { profile: Profile | null }; error: any }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<{ error: any }>
 }
@@ -35,7 +35,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -45,15 +44,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
-    // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        // Small delay to ensure session is fully established
-        if (event === 'SIGNED_IN') {
-          await new Promise(resolve => setTimeout(resolve, 500))
+        if (event === "SIGNED_IN") {
+          await new Promise((resolve) => setTimeout(resolve, 500))
         }
         await fetchProfile(session.user.id)
       } else {
@@ -68,12 +65,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchProfile = async (userId: string) => {
     try {
       setLoading(true)
-
-      // Use maybeSingle to handle 0 or 1 rows gracefully
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle()
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle()
 
       if (error) {
-        // Handle specific error cases
         if (error.code === "PGRST116" || error.message.includes("does not exist")) {
           console.warn("Database tables not set up yet. Please run the setup scripts.")
           setProfile(null)
@@ -95,31 +93,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // Handle multiple rows error - try to get first row as fallback
         if (error.message.includes("multiple") || error.message.includes("JSON object requested")) {
           console.warn("Multiple profile rows found for user. Using first row as fallback.")
-          try {
-            const { data: firstRow, error: fallbackError } = await supabase
-              .from("profiles")
-              .select("*")
-              .eq("id", userId)
-              .limit(1)
-              .single()
+          const { data: firstRow, error: fallbackError } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", userId)
+            .limit(1)
+            .single()
 
-            if (!fallbackError && firstRow) {
-              setProfile(firstRow)
-              setLoading(false)
-              return
-            }
-          } catch (fallbackError) {
-            console.error("Fallback query also failed:", fallbackError)
+          if (!fallbackError && firstRow) {
+            setProfile(firstRow)
+            setLoading(false)
+            return
           }
         }
 
         throw error
       }
 
-      // Handle case where no profile exists (data is null)
       if (!data) {
         console.log("No profile found for user, this is expected for new users")
         setProfile(null)
@@ -144,8 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       firstName: string
       lastName: string
       username: string
-    },
-  ) => {
+    }
+  ): Promise<{ data: any; error: any }> => {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -163,27 +155,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error
 
       if (data.user) {
-        // Ensure a profile record exists for the new user in case
-        // the database trigger hasn't been set up.
-        const { error: profileError } = await supabase
-          .from("profiles")
-          .insert({
-            id: data.user.id,
-            email,
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            username: userData.username,
-            user_type: userData.userType,
-          })
+        const { error: profileError } = await supabase.from("profiles").insert({
+          id: data.user.id,
+          email,
+          first_name: userData.firstName,
+          last_name: userData.lastName,
+          username: userData.username,
+          user_type: userData.userType,
+        })
+
         if (profileError) {
           console.error("Error inserting profile during sign up:", profileError)
         }
       }
 
-      return { error: null }
+      return { data, error: null }
     } catch (error) {
       console.error("Signup error:", error)
-      return { error }
+      return { data: null, error }
     }
   }
 
@@ -194,21 +183,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (signInError) {
+      setLoading(false)
       return { data: { profile: null }, error: signInError }
     }
 
     if (!signInData.user) {
+      setLoading(false)
       return { data: { profile: null }, error: new Error("Authentication succeeded but user not found.") }
     }
 
     try {
-      // Use maybeSingle to handle 0 or 1 rows gracefully
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", signInData.user.id).maybeSingle()
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", signInData.user.id)
+        .maybeSingle()
 
       if (error) {
-        // Handle multiple rows error - try to get first row as fallback
         if (error.message.includes("multiple") || error.message.includes("JSON object requested")) {
-          console.warn("Multiple profile rows found for user. Using first row as fallback.")
           const { data: firstRow, error: fallbackError } = await supabase
             .from("profiles")
             .select("*")
@@ -216,16 +208,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .limit(1)
             .single()
 
-          if (fallbackError) {
-            throw fallbackError
-          }
+          if (fallbackError) throw fallbackError
+
+          setUser(signInData.user)
+          setProfile(firstRow)
+          setLoading(false)
           return { data: { profile: firstRow }, error: null }
         }
         throw error
       }
 
       if (!data) {
-        // No profile exists for this user, create one from auth metadata
         const meta = signInData.user.user_metadata as any
         const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
@@ -240,22 +233,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .select()
           .single()
 
-        if (insertError) {
-          throw insertError
-        }
+        if (insertError) throw insertError
 
+        setUser(signInData.user)
+        setProfile(newProfile)
+        setLoading(false)
         return { data: { profile: newProfile }, error: null }
       }
 
+      setUser(signInData.user)
+      setProfile(data)
+      setLoading(false)
       return { data: { profile: data }, error: null }
     } catch (error) {
       console.error("Error fetching profile after sign in:", error)
+      setLoading(false)
       return { data: { profile: null }, error }
     }
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    try {
+      await supabase.auth.signOut()
+    } finally {
+      setUser(null)
+      setProfile(null)
+      setLoading(false)
+    }
   }
 
   const resetPassword = async (email: string) => {
