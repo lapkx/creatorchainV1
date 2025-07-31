@@ -164,15 +164,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.user) {
         // Ensure a profile record exists for the new user in case
-        // the database trigger hasn't been set up.
+        // the database trigger hasn't been set up. Use full_name to
+        // remain compatible with older database schemas.
         const { error: profileError } = await supabase
           .from("profiles")
           .insert({
             id: data.user.id,
             email,
-            first_name: userData.firstName,
-            last_name: userData.lastName,
-            username: userData.username,
+            full_name: `${userData.firstName} ${userData.lastName}`,
             user_type: userData.userType,
           })
         if (profileError) {
@@ -227,14 +226,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!data) {
         // No profile exists for this user, create one from auth metadata
         const meta = signInData.user.user_metadata as any
+        const fullName =
+          meta?.full_name ||
+          [meta?.first_name, meta?.last_name].filter(Boolean).join(" ") ||
+          null
         const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
           .insert({
             id: signInData.user.id,
             email: signInData.user.email!,
-            first_name: meta?.first_name ?? null,
-            last_name: meta?.last_name ?? null,
-            username: meta?.username ?? null,
+            full_name: fullName,
             user_type: meta?.user_type ?? "viewer",
           })
           .select()
