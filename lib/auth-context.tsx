@@ -75,26 +75,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (error.code === "PGRST116" || error.message.includes("does not exist")) {
           console.warn("Database tables not set up yet. Please run the setup scripts.")
           setProfile(null)
-          setLoading(false)
           return
         }
 
         if (error.message.includes("infinite recursion")) {
           console.error("RLS policy recursion detected. Database needs to be fixed.")
           setProfile(null)
-          setLoading(false)
           return
         }
 
         if (error.code === "42P01") {
           console.warn("Profiles table does not exist. Please set up the database.")
           setProfile(null)
-          setLoading(false)
           return
         }
 
         if (error.message.includes("multiple") || error.message.includes("JSON object requested")) {
-          console.warn("Multiple profile rows found for user. Using first row as fallback.")
           const { data: firstRow, error: fallbackError } = await supabase
             .from("profiles")
             .select("*")
@@ -104,7 +100,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           if (!fallbackError && firstRow) {
             setProfile(firstRow)
-            setLoading(false)
             return
           }
         }
@@ -115,7 +110,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!data) {
         console.log("No profile found for user, this is expected for new users")
         setProfile(null)
-        setLoading(false)
         return
       }
 
@@ -155,14 +149,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) throw error
 
       if (data.user) {
-        const { error: profileError } = await supabase.from("profiles").insert({
-          id: data.user.id,
-          email,
-          first_name: userData.firstName,
-          last_name: userData.lastName,
-          username: userData.username,
-          user_type: userData.userType,
-        })
+        const { error: profileError } = await supabase
+          .from("profiles")
+          .insert({
+            id: data.user.id,
+            email,
+            full_name: `${userData.firstName} ${userData.lastName}`,
+            first_name: userData.firstName,
+            last_name: userData.lastName,
+            username: userData.username,
+            user_type: userData.userType,
+          })
 
         if (profileError) {
           console.error("Error inserting profile during sign up:", profileError)
@@ -215,16 +212,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setLoading(false)
           return { data: { profile: firstRow }, error: null }
         }
+
         throw error
       }
 
       if (!data) {
         const meta = signInData.user.user_metadata as any
+        const fullName = meta?.full_name || [meta?.first_name, meta?.last_name].filter(Boolean).join(" ") || null
+
         const { data: newProfile, error: insertError } = await supabase
           .from("profiles")
           .insert({
             id: signInData.user.id,
             email: signInData.user.email!,
+            full_name: fullName,
             first_name: meta?.first_name ?? null,
             last_name: meta?.last_name ?? null,
             username: meta?.username ?? null,
